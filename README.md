@@ -60,10 +60,10 @@ git clone -b release/2.1.0 https://github.com/isaac-sim/IsaacLab.git
 ```
 # Option 1: Using the isaaclab.sh executable
 # note: this works for both the bundled python and the virtual environment
-./isaaclab.sh -p source/standalone/tutorials/00_sim/create_empty.py
+./isaaclab.sh -p scripts/tutorials/00_sim/create_empty.py
 
 # Option 2: Using python in your virtual environment
-python source/standalone/tutorials/00_sim/create_empty.py
+python scripts/tutorials/00_sim/create_empty.py
 ```
 
 ![image](https://github.com/user-attachments/assets/07c74fe4-97c1-4a4d-a4e4-8e6b4f51b38c)
