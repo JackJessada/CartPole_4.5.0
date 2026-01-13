@@ -60,7 +60,7 @@ class CartpoleSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointVelocityActionCfg(asset_name="robot", joint_names=["slider_to_cart"], scale=1.0)
+    joint_velocity = mdp.JointVelocityActionCfg(asset_name="robot", joint_names=["slider_to_cart"], scale=1.0)
 
 
 @configclass
@@ -103,8 +103,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]),
-            "position_range": (-float(np.deg2rad(24.0)), float(np.deg2rad(24.0))),
-            "velocity_range": (-float(np.deg2rad(24.0)), float(np.deg2rad(24.0))),
+            "position_range": (-float(np.deg2rad(12.0)), float(np.deg2rad(12.0))),
+            "velocity_range": (-float(np.deg2rad(12.0)), float(np.deg2rad(12.0))),
         },
     )
 
@@ -123,18 +123,6 @@ class RewardsCfg:
         weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]), "target": 0.0},
     )
-    # # (4) Shaping tasks: lower cart velocity
-    # cart_vel = RewTerm(
-    #     func=mdp.joint_vel_l1,
-    #     weight=-0.01,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"])},
-    # )
-    # # (5) Shaping tasks: lower pole angular velocity
-    # pole_vel = RewTerm(
-    #     func=mdp.joint_vel_l1,
-    #     weight=-0.005,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"])},
-    # )
 
 @configclass
 class TerminationsCfg:
