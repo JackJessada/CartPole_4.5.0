@@ -160,8 +160,12 @@ CARTPOLE
 python scripts/RL_Algorithm/random_action.py --task Stabilize-Isaac-Cartpole-v0
 ```
 
+[Stabilize Cart-Pole Task.webm](https://github.com/user-attachments/assets/5b7c8574-0ea9-4757-8248-e50095130b09)
+
 ### 2. Swing-up Cart-Pole Task
 
 ```
 python scripts/RL_Algorithm/random_action.py --task SwingUp-Isaac-Cartpole-v0
 ```
+
+[SwingUp Cart-Pole Task.webm](https://github.com/user-attachments/assets/03ce068c-f052-416d-93d3-698c48c11606)
