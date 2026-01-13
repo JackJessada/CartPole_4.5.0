@@ -76,6 +76,10 @@ Submit the answers to the following questions:
 
 3. Consider policy, state, value function, and model as mathematical functions, what would each one take as input and output? 
 
+Part 4: Understanding the `Homework 2 & 3` Code Template
+---
 
+Now that you have grasped the fundamental concepts of reinforcement learning, it's time to dive into the implementation details. For detailed setup instructions, troubleshooting guides, and additional resources specific to this homework, please refer to the [CartPole Assignment Guide](https://github.com/S-Tuchapong/FRA503-Deep-Reinforcement-Learning-for-Robotics/blob/main/CartPole_4.5.0/README.md).
 
+This guide will help you understand the code structure and prepare you for implementing your own RL environments in future assignments.
 
