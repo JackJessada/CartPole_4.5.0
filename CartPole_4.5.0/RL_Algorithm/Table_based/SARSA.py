@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 from RL_Algorithm.RL_base import BaseAlgorithm, ControlType
 
-class Double_Q_Learning(BaseAlgorithm):
+class SARSA(BaseAlgorithm):
     def __init__(
             self,
             num_of_action: int,
@@ -15,7 +15,7 @@ class Double_Q_Learning(BaseAlgorithm):
             discount_factor: float,
     ) -> None:
         """
-        Initialize the Double Q-Learning algorithm.
+        Initialize the SARSA algorithm.
 
         Args:
             num_of_action (int): Number of possible actions.
@@ -28,7 +28,7 @@ class Double_Q_Learning(BaseAlgorithm):
             discount_factor (float): Discount factor for future rewards.
         """
         super().__init__(
-            control_type=ControlType.DOUBLE_Q_LEARNING,
+            control_type=ControlType.SARSA,
             num_of_action=num_of_action,
             action_range=action_range,
             discretize_state_weight=discretize_state_weight,
@@ -41,14 +41,24 @@ class Double_Q_Learning(BaseAlgorithm):
         
     def update(
         self,
-        #========= put your code here =========#
-
-        
+        state: tuple,
+        action: int,
+        reward: float,
+        next_state: tuple,
+        next_action: int, # S A R nS nA
+        done: bool
     ):
         """
-        Update Q-values using Double Q-Learning.
+        Update Q-values using SARSA .
 
-        This method applies the Double Q-Learning update rule to improve policy decisions by updating the Q-table.
+        This method applies the SARSA update rule to improve policy decisions by updating the Q-table.
         """
-        pass
-        #======================================#
+        current_q = self.q_values[state][action]
+        if done:
+            # if step stop or fail it's not have a next stage
+            G = reward
+        else:
+            next_q = self.q_values[next_state][next_action]
+            G = reward + (self.discount_factor * next_q)
+
+        self.q_values[state][action] = current_q + self.lr * (G - current_q)

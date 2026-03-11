@@ -1,7 +1,7 @@
 """Script to train RL agent."""
 
 """Launch Isaac Sim Simulator first."""
-
+from torch.utils.tensorboard import SummaryWriter
 import argparse
 import sys
 import os
@@ -10,7 +10,7 @@ from isaaclab.app import AppLauncher
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from RL_Algorithm.Algorithm.Q_Learning import Q_Learning
+from RL_Algorithm.RL_base import ControlType
 from tqdm import tqdm
 
 # add argparse arguments
@@ -22,8 +22,14 @@ parser.add_argument("--num_envs", type=int, default=1, help="Number of environme
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
-
-
+parser.add_argument(
+    "--algorithm", 
+    type=int, 
+    choices=[e.value for e in ControlType], 
+    default=ControlType.Q_LEARNING.value, 
+    help="Select Algorithm: 1=MC, 2=TEMPORAL_DIFFERENCE (SARSA), 3=Q_LEARNING, 4=DOUBLE_Q_LEARNING"
+)
+parser.add_argument("--num_episodes", default=2000, type=int)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -60,6 +66,7 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 # Import extensions to set up environment tasks
 import CartPole.tasks  # noqa: F401
 
+from isaaclab.utils.dict import print_dict
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
@@ -98,23 +105,31 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print_dict(video_kwargs, nesting=4)
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
-    # ==================================================================== #
-    # ========================= Can be modified ========================== #
-
-    # hyperparameters
-    num_of_action = None
-    action_range = [None, None]  # [min, max]
-    discretize_state_weight = [None, None, None, None]  # [pose_cart:int, pose_pole:int, vel_cart:int, vel_pole:int]
-    learning_rate = None
-    n_episodes = None
-    start_epsilon = None
-    epsilon_decay = None  # reduce the exploration over time
-    final_epsilon = None
-    discount = None
-
+    # Hyperparameters
+    num_of_action = 3                      
+    action_range = [-3.0,3.0]           
+    discretize_state_weight = [1, 20, 1, 5]#[pose_cart:int, pose_pole:int, vel_cart:int, vel_pole:int]
+    learning_rate = 0.1
+    n_episodes = args_cli.num_episodes                    
+    start_epsilon = 1.0
+    epsilon_decay = 0.995 #not use for now                  # decay rate. (original_e * decay rate)
+    final_epsilon = 0.01
+    discount = 0.9                        # gamma
+    warmup_rario = 0.2
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
-    Algorithm_name = "Q_Learning"
-    agent = Q_Learning(
+
+    algo_enum = ControlType(args_cli.algorithm)
+
+    if algo_enum == ControlType.MONTE_CARLO:
+        from RL_Algorithm.Table_based.MC import MC as AgentClass
+    elif algo_enum == ControlType.SARSA:
+        from RL_Algorithm.Table_based.SARSA import SARSA as AgentClass
+    elif algo_enum == ControlType.DOUBLE_Q_LEARNING:
+        from RL_Algorithm.Table_based.Double_Q_Learning import Double_Q_Learning as AgentClass
+    else:
+        from RL_Algorithm.Table_based.Q_Learning import Q_Learning as AgentClass
+
+    agent = AgentClass(
         num_of_action=num_of_action,
         action_range=action_range,
         discretize_state_weight=discretize_state_weight,
@@ -124,62 +139,93 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         final_epsilon=final_epsilon,
         discount_factor=discount
     )
-
-    # reset environment
-    obs, _ = env.reset()
+    tb_log_dir = os.path.join(log_dir, "tensorboard", algo_enum.name)
+    writer = SummaryWriter(log_dir=tb_log_dir)
     timestep = 0
     sum_reward = 0
-    # simulate environment
+    max_abs_cart_pos = 0.0
+    max_abs_pole_pos = 0.0
     while simulation_app.is_running():
-        # run everything in inference mode
         with torch.inference_mode():
         
             for episode in tqdm(range(n_episodes)):
                 obs, _ = env.reset()
                 done = False
                 cumulative_reward = 0
+                
+                action_tensor, action_idx = agent.get_action(obs)
 
+                ####DEBUG
+                sub_steps = 0
                 while not done:
-                    # agent stepping
-                    action, action_idx = agent.get_action(obs)
-
                     # env stepping
-                    next_obs, reward, terminated, truncated, _ = env.step(action)
+                    state_array = obs["policy"].squeeze().cpu().numpy()
+                    cart_pos = abs(state_array[0])
+                    pole_pos = abs(state_array[1]) 
+                    
+                    max_abs_cart_pos = max(max_abs_cart_pos, float(cart_pos))
+                    max_abs_pole_pos = max(max_abs_pole_pos, float(pole_pos))
+                    action_tensor_env = action_tensor.reshape(1, 1)
+                    next_obs, reward, terminated, truncated, _ = env.step(action_tensor_env)
 
                     reward_value = reward.item()
-                    terminated_value = terminated.item() 
+                    terminated_value = terminated.item()
+                    truncated_value = truncated.item()
+                    done = terminated_value or truncated_value
+                    # print(f"done {done}, terminate {terminated_value}, truncate {truncated_value}")                   
                     cumulative_reward += reward_value
 
-                    agent.update(
-                        #== put your code here ==#
-                    )
+                    # discretize 
+                    state_dis = agent.discretize_state(obs)
+                    next_state_dis = agent.discretize_state(next_obs)
 
-                    done = terminated or truncated
-                    obs = next_obs
                 
+                    if algo_enum == ControlType.SARSA:
+                        next_action_tensor, next_action_idx = agent.get_action(next_obs)
+                        agent.update(state_dis, action_idx, reward_value, next_state_dis, next_action_idx, done)
+                        action_tensor, action_idx = next_action_tensor, next_action_idx
+                    
+                    elif algo_enum == ControlType.MONTE_CARLO:
+                        agent.update(state_dis, action_idx, reward_value, done)
+                        if not done:
+                            action_tensor, action_idx = agent.get_action(next_obs)
+                            
+                    else:
+                        # Q_Learning and Double_Q_Learning
+                        agent.update(state_dis, action_idx, reward_value, next_state_dis, done)
+                        if not done:
+                            action_tensor, action_idx = agent.get_action(next_obs)
+                    sub_steps+=1
+                    # print(f"Ep: {episode}, substep: {sub_steps}")
+                    obs = next_obs
+                   
+                writer.add_scalar("Train/Episode_Reward", cumulative_reward, episode)
+                writer.add_scalar("Train/Steps_per_Episode", sub_steps, episode)
+                writer.add_scalar("Metrics/Max_Abs_Cart_Pos", max_abs_cart_pos, episode)
+                writer.add_scalar("Metrics/Max_Abs_Pole_Pos", max_abs_pole_pos, episode)
                 sum_reward += cumulative_reward
                 if episode % 100 == 0:
-                    print("avg_score: ", sum_reward / 100.0)
+                    avg_score = sum_reward / 100.0
+                    print(f"avg_score: {avg_score:.2f} | Epsilon: {agent.epsilon:.4f}")
                     sum_reward = 0
-                    print(agent.epsilon)
-
-                    # Save Q-Learning agent
-                    q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}_{discretize_state_weight[0]}_{discretize_state_weight[1]}.json"
-                    full_path = os.path.join(f"q_value/{task_name}", Algorithm_name)
+                    writer.add_scalar("Train/Average_Reward_100_Eps", avg_score, episode)
+                    writer.add_scalar("Parameters/Epsilon", agent.epsilon, episode)
+                    q_value_file = f"{algo_enum.name}_{episode}_{num_of_action}_{action_range[1]}_{discretize_state_weight[0]}_{discretize_state_weight[1]}.json"
+                    full_path = os.path.join(f"q_value/{task_name}", algo_enum.name)
+                    os.makedirs(full_path, exist_ok=True)
+                    
                     agent.save_q_value(full_path, q_value_file)
 
-                agent.decay_epsilon()
+                agent.decay_epsilon(episode, n_episodes, warmup_rario)
              
         if args_cli.video:
             timestep += 1
-            # Exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
-        
+        writer.close()
         print("!!! Training is complete !!!")
         break
     # ==================================================================== #
-
     # close the simulator
     env.close()
 

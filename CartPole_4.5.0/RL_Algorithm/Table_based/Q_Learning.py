@@ -42,11 +42,25 @@ class Q_Learning(BaseAlgorithm):
         
     def update(
         self,
-
+        state: tuple,
+        action: int,
+        reward: float,
+        next_state: tuple,
+        done: bool
     ):
         """
         Update Q-values using Q-Learning.
 
         This method applies the Q-Learning update rule to improve policy decisions by updating the Q-table.
         """
-        pass
+        current_q = self.q_values[state][action]
+        
+        if done:
+            G = reward
+        else:
+            # get max q from next state. similar to SARSA but 
+            max_next_q = np.max(self.q_values[next_state])
+            G = reward + (self.discount_factor * max_next_q)
+            
+        # Q_new = Q_old + lr * (G - Q_old)
+        self.q_values[state][action] = current_q + self.lr * (G - current_q)

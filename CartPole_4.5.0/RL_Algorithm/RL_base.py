@@ -4,14 +4,14 @@ from enum import Enum
 import os
 import json
 import torch
-
+import math
 
 class ControlType(Enum):
     """
     Enum representing different control algorithms.
     """
     MONTE_CARLO = 1
-    TEMPORAL_DIFFERENCE = 2
+    SARSA = 2
     Q_LEARNING = 3
     DOUBLE_Q_LEARNING = 4
 
@@ -82,7 +82,12 @@ class BaseAlgorithm():
         """
 
         # ========= put your code here =========#
-        pass
+        state_tensor = obs["policy"].squeeze()
+        state_array = state_tensor.cpu().numpy()
+        # print("State_array: ",state_array)
+        discretized = np.round(state_array * self.discretize_state_weight).astype(int)
+        # print("discretize_state", discretized)
+        return tuple(discretized)
         # ======================================#
 
     def get_discretize_action(self, obs_dis) -> int:
@@ -96,7 +101,12 @@ class BaseAlgorithm():
             int: Chosen discrete action index.
         """
         # ========= put your code here =========#
-        pass
+        if np.random.rand() < self.epsilon:
+            action = np.random.randint(0, self.num_of_action)
+        else:
+            action = np.argmax(self.q_values[obs_dis])
+            
+        return int(action)
         # ======================================#
     
     def mapping_action(self, action):
@@ -111,7 +121,16 @@ class BaseAlgorithm():
             torch.Tensor: Scaled action tensor.
         """
         # ========= put your code here =========#
-        pass
+        min_action, max_action = self.action_range
+        
+        if self.num_of_action <= 1:
+            mapped_value = 0.0
+        else:
+            step_size = (max_action - min_action) / (self.num_of_action - 1)
+            mapped_value = min_action + (action * step_size)     
+        # print("action: ", action, "map value: ",mapped_value)
+        action_tensor = torch.tensor([mapped_value], dtype=torch.float32)
+        return action_tensor
         # ======================================#s
 
     def get_action(self, obs) -> torch.tensor:
@@ -129,11 +148,20 @@ class BaseAlgorithm():
         action_tensor = self.mapping_action(action_idx)
         return action_tensor, action_idx
     
-    def decay_epsilon(self):
+    def decay_epsilon(self, current_episode, total_episodes, warmup_ratio):
         """
         Decay epsilon value to reduce exploration over time.
         """
-
+        warmup_steps = int(total_episodes * warmup_ratio)
+            
+        if current_episode <= warmup_steps:
+            self.epsilon = 1
+        else:
+            progress = (current_episode - warmup_steps) / (total_episodes - warmup_steps)
+            progress = min(1.0, max(0.0, progress)) 
+            cosine_curve = 0.5 * (1 + math.cos(math.pi * progress))
+            self.epsilon = self.final_epsilon + (1 - self.final_epsilon) * cosine_curve
+        return self.epsilon
     def save_q_value(self, path, filename):
         """
         Save the model parameters to a JSON file.
@@ -200,3 +228,5 @@ class BaseAlgorithm():
                     self.n_values[tuple_state] = n_values.copy()
             return self.q_values
 
+    def get_control_type(self):
+        return self.control_type

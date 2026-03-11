@@ -41,11 +41,33 @@ class MC(BaseAlgorithm):
         
     def update(
         self,
-        
+        state: tuple,
+        action: int,
+        reward: float,
+        done: bool
     ):
         """
         Update Q-values using Monte Carlo.
 
         This method applies the Monte Carlo update rule to improve policy decisions by updating the Q-table.
         """
-        pass
+        # store in 
+        self.obs_hist.append(state)
+        self.action_hist.append(action)
+        self.reward_hist.append(reward)
+
+        if done:
+            G = 0 # G = R + (G_next * discount)
+            for t in range(len(self.reward_hist)-1, -1 , -1):
+                s_t = self.obs_hist[t]
+                a_t = self.action_hist[t]
+                r_t = self.reward_hist[t]
+
+                G = r_t + (self.discount_factor * G)
+                # save freq of stage, action
+                self.n_values[s_t][a_t] += 1
+                # # Q(S,A) <-- Q(S,A) + lr * [G - Q(S,A)]
+                self.q_values[s_t][a_t] += self.lr * (G - self.q_values[s_t][a_t])
+            self.obs_hist.clear()
+            self.action_hist.clear()
+            self.reward_hist.clear()
